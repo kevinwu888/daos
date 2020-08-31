@@ -304,6 +304,7 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 		D_ASSERT(target_set[spare_id] == 2);
 	}
 }
+
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
 			     uint32_t pool_size)
@@ -515,7 +516,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	/* No longer needed, copied into pool buf */
 	D_FREE(comps);
 
-	rc = pool_map_create(buf, 1, po_map_out);
+	rc = pool_map_create(buf, 1, true, po_map_out);
 	D_ASSERT(rc == 0);
 
 	mia.ia_type         = pl_type;

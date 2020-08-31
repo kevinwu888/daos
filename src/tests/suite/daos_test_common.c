@@ -107,9 +107,9 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
-		rc = dmg_pool_create(dmg_config_file,
-				     arg->uid, arg->gid, arg->group,
-				     NULL, outpool->pool_size, nvme_size,
+		rc = dmg_pool_create(dmg_config_file, arg->uid, arg->gid,
+				     arg->group, arg->rank_list,
+				     outpool->pool_size, nvme_size,
 				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
@@ -276,7 +276,8 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool)
+	   daos_size_t pool_size, struct test_pool *pool,
+	   d_rank_list_t *rank_list)
 {
 	test_arg_t		*arg = *state;
 	struct timeval		 now;
@@ -303,6 +304,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
 		MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 		arg->multi_rank = multi_rank;
+		arg->rank_list = rank_list;
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
 
@@ -583,6 +585,7 @@ int test_make_dirs(char *dir, mode_t mode)
 }
 
 d_rank_t ranks_to_kill[MAX_KILLS];
+d_rank_t ranks_to_add[MAX_KILLS];
 
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
@@ -610,6 +613,9 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		for (i = 0; i < MAX_KILLS; i++)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
+
+		for (i = 0; i < MAX_KILLS; ++i)
+			ranks_to_add[i] = arg->srv_nnodes + i;
 
 		arg->hce = crt_hlc_get();
 	}
@@ -846,6 +852,29 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
+static void
+daos_dmg_pool_extend(const uuid_t pool_uuid, const char *grp,
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank)
+{
+	char		dmg_cmd[DTS_CFG_MAX];
+	int		rc;
+
+	/* build and invoke dmg cmd */
+	dts_create_config(dmg_cmd, "dmg pool extend -i --pool=%s",
+			  DP_UUID(pool_uuid));
+
+	dts_append_config(dmg_cmd, " --ranks=%d", rank);
+	dts_append_config(dmg_cmd, " --scm-size=%d", 0);
+
+	if (dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message("%s rc 0x%x\n", dmg_cmd, rc);
+	assert_int_equal(rc, 0);
+}
+
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    const char *dmg_config, const d_rank_list_t *svc,
@@ -856,13 +885,12 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 }
 
 void
-daos_add_target(const uuid_t pool_uuid, const char *grp,
-		const char *dmg_config, const d_rank_list_t *svc,
-		d_rank_t rank, int tgt_idx)
+daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
 			     rank, tgt_idx);
-
 }
 
 void
@@ -888,7 +916,15 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 		const char *dmg_config, const d_rank_list_t *svc,
 		d_rank_t rank)
 {
-	daos_add_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_reint_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+}
+
+void
+daos_extend_server(const uuid_t pool_uuid, const char *grp,
+		   const char *dmg_config, const d_rank_list_t *svc,
+		   d_rank_t rank)
+{
+	daos_dmg_pool_extend(pool_uuid, grp, dmg_config, svc, rank);
 }
 
 void
