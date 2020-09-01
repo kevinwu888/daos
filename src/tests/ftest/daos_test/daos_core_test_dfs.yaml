@@ -12,7 +12,7 @@ hosts:
     - client-G
     - client-H
 
-timeout: 250
+timeout: 500
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
@@ -54,6 +54,6 @@ daos_tests:
   num_clients:
     num_clients: 32
   Tests:
-    test_F:
-      daos_test: F
+    test_D:
+      daos_test: D
       test_name: DAOS File System tests
