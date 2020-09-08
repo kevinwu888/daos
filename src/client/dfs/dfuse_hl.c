@@ -398,7 +398,7 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 
 	mode = S_IFREG | mode;
 	/** TODO - set the oclass and array chunk size using the UNS */
-	rc = dfs_open(dfs, parent, name, mode, fi->flags, OC_SX, 0,
+	rc = dfs_open(dfs, parent, name, mode, fi->flags, OC_RP_2G1, 0,
 		      NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc = -rc);
@@ -445,7 +445,7 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	/** TODO - set the oclass and array chunk size using the UNS */
-	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, OC_SX,
+	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, OC_RP_2G1,
 		      0, NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc = -rc);

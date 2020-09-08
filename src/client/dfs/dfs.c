@@ -59,7 +59,7 @@
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** default object class for files & dirs */
-#define DFS_DEFAULT_OBJ_CLASS	OC_SX
+#define DFS_DEFAULT_OBJ_CLASS	OC_RP_2G1
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC		0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
