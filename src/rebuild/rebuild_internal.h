@@ -103,6 +103,10 @@ struct rebuild_tgt_pool_tracker {
 				rt_scan_done:1,
 				rt_global_scan_done:1,
 				rt_global_done:1;
+
+	ABT_mutex demo_lock;
+	char *demo;
+	int demo_count;
 };
 
 struct rebuild_server_status {
@@ -126,6 +130,9 @@ struct rebuild_global_pool_tracker {
 	/** the current version being rebuilt */
 	uint32_t	rgt_rebuild_ver;
 
+	/* Current operation undergoing rebuild */
+	daos_rebuild_opc_t rgt_rebuild_op;
+
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
 
@@ -136,6 +143,7 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_leader_term;
 
 	uint64_t	rgt_time_start;
+
 
 	/* stable epoch of the rebuild */
 	uint64_t	rgt_stable_epoch;

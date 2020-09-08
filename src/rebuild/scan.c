@@ -310,11 +310,13 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 }
 
 #define LOCAL_ARRAY_SIZE	128
+#define DEMO_MAX		100000
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
 	uint32_t			yield_freq;
+	char *demo;
 };
 
 static int
@@ -392,6 +394,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
 		struct pl_obj_layout *layout = NULL;
 		bool still_needed;
+		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
 
 		/*
 		 * Compute placement for the object, then check if the layout
@@ -403,7 +406,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank);
+						      layout, myrank, mytarget);
 		if (!still_needed) {
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is no longer reachable on this rank",
@@ -440,12 +443,24 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		/* Reclaim does not require sending any objects */
 		rebuild_nr = 0;
+	} else if (rpt->rt_rebuild_op == RB_OP_DEMO_ENUMERATE) {
+		int len;
+
+		ABT_mutex_lock(rpt->demo_lock);
+		rpt->demo_count++;
+		len = strlen(rpt->demo);
+		snprintf(rpt->demo + len, DEMO_MAX - len - 1,
+			 "\n- "DF_UOID, DP_UOID(oid));
+		ABT_mutex_unlock(rpt->demo_lock);
+
+		rebuild_nr = 0;
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
 			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
-			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+			 rpt->rt_rebuild_op == RB_OP_DEMO_ENUMERATE);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -631,9 +646,29 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
+	if (rpt->rt_rebuild_op == RB_OP_DEMO_ENUMERATE) {
+		rc = ABT_mutex_create(&rpt->rt_lock);
+		if (rc != ABT_SUCCESS) {
+			D_PRINT("DEMO: ABT mutex create failed: %d\n", rc);
+			return;
+		}
+		D_ALLOC_ARRAY(rpt->demo, DEMO_MAX);
+		if (rpt->demo == NULL) {
+			D_PRINT("DEMO: Out of memory allocating demo buf!\n");
+			return;
+		}
+		rpt->demo_count = 0;
+	}
+
 	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
 	if (rc)
 		D_GOTO(out, rc);
+
+	if (rpt->rt_rebuild_op == RB_OP_DEMO_ENUMERATE && rpt->demo_count > 0) {
+		D_PRINT("\n\nObject shards on this rank:%s\nTotal Shards:%d\n\n", rpt->demo, rpt->demo_count);
+		D_FREE(rpt->demo);
+		ABT_mutex_free(&rpt->rt_lock);
+	}
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));

@@ -38,12 +38,8 @@
 
 #define KEY_NR		10
 #define OBJ_NR		10
-#define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-#define REBUILD_POOL_SIZE	(4ULL << 30)
-#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
 
 d_rank_t
 get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
@@ -85,6 +81,120 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity)
 }
 
 #define DATA_SIZE	(1048576 * 2 + 512)
+static void
+rebuild_generate_data(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			i;
+	int			n;
+
+	if (!test_runable(arg, 3))
+		return;
+
+	srand(1234);
+	for (n = 0; n < 20; n++) {
+		oid = dts_oid_gen(OC_RP_2G1, 0, 0xFEEDC0DE);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		/** Insert 1000 records */
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      KEY_NR, DP_OID(oid));
+		for (i = 0; i < KEY_NR; i++) {
+			char	key[16];
+
+			sprintf(key, "dkey_0_%d", i);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+		}
+
+		ioreq_fini(&req);
+	}
+}
+
+int
+generate_data_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc = 0;
+
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
+	if (arg->multi_rank)
+		MPI_Barrier(MPI_COMM_WORLD);
+
+	if (!daos_handle_is_inval(arg->coh)) {
+		rc = test_teardown_cont_hdl(arg);
+		if (rc)
+			return rc;
+	}
+
+	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
+	    !arg->pool.destroyed) {
+		if (arg->myrank != 0) {
+			if (!daos_handle_is_inval(arg->pool.poh))
+				rc = daos_pool_disconnect(arg->pool.poh, NULL);
+		}
+		if (arg->multi_rank)
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	}
+
+	if (!daos_handle_is_inval(arg->eq)) {
+		rc = daos_eq_destroy(arg->eq, 0);
+		if (rc) {
+			print_message("failed to destroy eq: %d\n", rc);
+			return rc;
+		}
+	}
+
+	if (arg->pool.svc)
+		d_rank_list_free(arg->pool.svc);
+	if (arg->pool.alive_svc)
+		d_rank_list_free(arg->pool.alive_svc);
+	D_FREE(arg);
+	*state = NULL;
+	return 0;
+}
+
+
+static void
+rebuild_generate_lots_of_data(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			i;
+	int			n;
+
+	if (!test_runable(arg, 3))
+		return;
+
+	for (n = 0; n < 1000; n++) {
+		oid = dts_oid_gen(OC_RP_2G1, 0, 0xFEEDC0DE);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      1, DP_OID(oid));
+		for (i = 0; i < 1; i++) {
+			char	key[16];
+
+			sprintf(key, "dkey_0_%d", i);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+		}
+
+		ioreq_fini(&req);
+	}
+}
+
 static void
 rebuild_dkeys(void **state)
 {
@@ -596,9 +706,15 @@ rebuild_objects(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+int demo_sub_setup(void **state);
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD1: rebuild small rec multiple dkeys",
+	{"REBUILD0: generate data",
+	 rebuild_generate_data, rebuild_small_sub_setup, generate_data_teardown},
+	{"REBUILD0: generate lots of data",
+	 rebuild_generate_lots_of_data, demo_sub_setup, NULL},
+	{"REBUILD1: rebuild small rec mulitple dkeys",
 	 rebuild_dkeys, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD2: rebuild small rec multiple akeys",
 	 rebuild_akeys, rebuild_small_sub_setup, test_teardown},

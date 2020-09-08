@@ -33,25 +33,20 @@
 
 #define DTS_OCLASS_DEF		OC_RP_XSF
 
-static uint32_t obj_id_gen	= 1;
+static uint32_t obj_id_gen	= 999999000UL;
 static uint64_t int_key_gen	= 1;
 
 daos_obj_id_t
 dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 {
 	daos_obj_id_t	oid;
-	uint64_t	hdr;
 
 	if (oclass == 0)
 		oclass = DTS_OCLASS_DEF;
 
-	hdr = seed;
-	hdr <<= 32;
-
 	/* generate a unique and not scary long object ID */
 	oid.lo	= obj_id_gen++;
-	oid.lo	|= hdr;
-	oid.hi	= rand() % 100;
+	oid.hi	= 115292244949965216;
 	daos_obj_generate_id(&oid, ofeats, oclass, 0);
 
 	return oid;

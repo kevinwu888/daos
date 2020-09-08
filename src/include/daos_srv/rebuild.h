@@ -43,6 +43,7 @@ typedef enum {
 	RB_OP_REINT,
 	RB_OP_EXTEND,
 	RB_OP_RECLAIM,
+	RB_OP_DEMO_ENUMERATE,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "RB_OP_FAIL" : \
@@ -50,6 +51,7 @@ typedef enum {
 			  (rb_op) == RB_OP_REINT ? "RB_OP_REINT" : \
 			  (rb_op) == RB_OP_EXTEND ? "RB_OP_EXTEND" : \
 			  (rb_op) == RB_OP_RECLAIM ? "RB_OP_RECLAIM" : \
+			  (rb_op) == RB_OP_DEMO_ENUMERATE ? "RB_OP_DEMO_ENUMERATE" : \
 			  "RB_OP_UNKNOWN")
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,

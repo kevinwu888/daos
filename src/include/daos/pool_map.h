@@ -226,6 +226,7 @@ int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank);
+int pool_map_activate_new_target(struct pool_map *map, uint32_t id);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 

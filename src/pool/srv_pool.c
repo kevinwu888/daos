@@ -160,7 +160,7 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	if (rc != 0)
 		return rc;
 
-	return pool_map_create(buf, version, true, map);
+	return pool_map_create(buf, version, false, map);
 }
 
 /* Store uuid in file path. */
@@ -2704,6 +2704,16 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
+	//D_PRINT("Scheduling object enumeration\n");
+	struct pool_target_id id = { 0 };
+	struct pool_target_id_list tgts = { .pti_number = 1, .pti_ids = &id };
+	rc = ds_rebuild_schedule(in->pqi_op.pi_uuid, map_version, &tgts,
+				 RB_OP_DEMO_ENUMERATE);
+	if (rc != 0) {
+		D_PRINT("failed to schedule enumerate rc: "DF_RC"\n",
+			DP_RC(rc));
+	}
+
 out_map_version:
 	out->pqo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 	if (map_buf)
@@ -2737,7 +2747,7 @@ process_query_result(daos_pool_info_t *info, uuid_t pool_uuid,
 	int			rc;
 	unsigned int		num_disabled = 0;
 
-	rc = pool_map_create(map_buf, map_version, true, &map);
+	rc = pool_map_create(map_buf, map_version, false, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		return rc;
@@ -3743,7 +3753,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	updated = true;
 
 	/* Update svc->ps_pool to match the new pool map. */
-	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, true, map_version);
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, false, map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to update pool map cache: %d\n",
 			DP_UUID(svc->ps_uuid), rc);

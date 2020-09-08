@@ -1,4 +1,9 @@
 /*
+
+		if (activate && ta->ta_comp.co_status == PO_COMP_ST_NEW) {
+			ta->ta_comp.co_status = PO_COMP_ST_UPIN;
+			D_PRINT("\nDEMO: Activating!\n\n");
+		}
  *  (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -334,6 +339,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+		} else if (rc == -DER_STALE) {
+			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
+			       rw_args->rpc);
 		} else {
 			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
 				DF_RC"\n", rw_args->rpc, opc,

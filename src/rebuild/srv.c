@@ -641,7 +641,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
-			D_PRINT("%s", sbuf);
+			if (rgt->rgt_rebuild_op != RB_OP_DEMO_ENUMERATE) {
+				D_PRINT("%s", sbuf);
+			}
 			break;
 		}
 
@@ -649,7 +651,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		/* print something at least for each 10 secons */
 		if (now - last_print > 10) {
 			last_print = now;
-			D_PRINT("%s", sbuf);
+			if (rgt->rgt_rebuild_op != RB_OP_DEMO_ENUMERATE) {
+				D_PRINT("%s", sbuf);
+			}
 		}
 
 		dss_ult_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
@@ -735,17 +739,19 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	(*rgt)->rgt_leader_term = leader_term;
 	(*rgt)->rgt_time_start = d_timeus_secdiff(0);
+	(*rgt)->rgt_rebuild_op = rebuild_op;
 
 	D_ASSERT(rebuild_op == RB_OP_FAIL ||
 		 rebuild_op == RB_OP_DRAIN ||
 		 rebuild_op == RB_OP_REINT ||
 		 rebuild_op == RB_OP_EXTEND ||
-		 rebuild_op == RB_OP_RECLAIM);
+		 rebuild_op == RB_OP_RECLAIM ||
+		 rebuild_op == RB_OP_DEMO_ENUMERATE);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
 			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			rebuild_op == RB_OP_REINT ? PO_COMP_ST_UP :
 			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_NEW :
-			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM */
+			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM, RB_OP_DEMO_ENUMERATE */
 
 	if (tgts != NULL && tgts->pti_number > 0) {
 		bool changed = false;
@@ -1055,9 +1061,11 @@ rebuild_task_ult(void *arg)
 		return;
 	}
 
-	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u, op=%s)\n",
-		DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
-		RB_OP_STR(task->dst_rebuild_op));
+	if (task->dst_rebuild_op != RB_OP_DEMO_ENUMERATE) {
+		D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u, op=%s)\n",
+			DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
+			RB_OP_STR(task->dst_rebuild_op));
+	}
 
 	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
 				  task->dst_rebuild_op, &rgt);
@@ -1389,6 +1397,16 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	struct rebuild_task	*task;
 	int			rc;
 
+	if (rebuild_op == RB_OP_DEMO_ENUMERATE) {
+		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
+				      dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, uuid) == 0) {
+				/* Already doing rebuild - don't run this */
+				return 0;
+			}
+		}
+	}
+
 	/* Check if the pool already in the queue list */
 	rc = rebuild_try_merge_tgts(uuid, map_ver, rebuild_op, tgts);
 	if (rc)
@@ -1404,12 +1422,15 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	uuid_copy(task->dst_pool_uuid, uuid);
 	D_INIT_LIST_HEAD(&task->dst_list);
 
+	/* TODO: Merge everything for reclaim */
 	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
 	if (rc)
 		D_GOTO(free, rc);
 
-	rebuild_print_list_update("Rebuild queued",
-				  uuid, map_ver, rebuild_op, tgts);
+	if (rebuild_op != RB_OP_DEMO_ENUMERATE) {
+		rebuild_print_list_update("Rebuild queued",
+					  uuid, map_ver, rebuild_op, tgts);
+	}
 	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
 	if (!rebuild_gst.rg_rebuild_running) {

@@ -37,7 +37,7 @@
 static test_arg_t *save_arg;
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 33)
 #define NUM_ADD_START_RANKS 4
 
 enum REBUILD_TEST_OP_TYPE {
@@ -692,6 +692,36 @@ rebuild_small_sub_setup(void **state)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, NULL, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
+}
+
+int
+demo_sub_setup(void **state)
+{
+	test_arg_t	*arg;
+	int		rc;
+	d_rank_list_t	rank_list;
+	int		i;
+
+	save_group_state(state);
+
+	D_ALLOC_ARRAY(rank_list.rl_ranks, 3);
+	rank_list.rl_nr = 3;
+
+	for (i = 0; i < 3; ++i)
+		rank_list.rl_ranks[i] = i;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, NULL, &rank_list);
 	if (rc)
 		return rc;
 

@@ -976,7 +976,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	}
 
 	if (iods[1].iod_size != sizeof(sb_ver) || sb_ver != DFS_SB_VERSION) {
-		D_ERROR("Incompatible SB version.\n");
+		D_ERROR("Incompatible SB version. %zu vs %zu, %u vs %u.\n", iods[1].iod_size,  sizeof(sb_ver), sb_ver, DFS_SB_VERSION);
 		D_GOTO(err, rc = EINVAL);
 	}
 
